@@ -63,7 +63,18 @@ PROGRAM pic
   CHARACTER(LEN=*), PARAMETER :: data_dir_file = 'USE_DATA_DIRECTORY'
   CHARACTER(LEN=64) :: timestring
   REAL(num) :: runtime, dt_store
-
+!zmeny
+#if defined(PARTICLE_ID)
+	INTEGER(i8), ALLOCATABLE :: my_ID(:)
+#elif defined(PARTICLE_ID4)
+        INTEGER(i4), ALLOCATABLE :: my_ID(:)
+#endif
+	INTEGER :: nop
+	CHARACTER(LEN=64) :: list_of_particles = 'list.list'
+	CHARACTER(LEN=64) :: nop_file = 'nop.list', line 
+	LOGICAL :: res
+	CHARACTER(LEN=64) :: filename
+!end_zmeny 
   step = 0
   time = 0.0_num
 #ifdef COLLISIONS_TEST
@@ -107,6 +118,22 @@ PROGRAM pic
   CALL mpi_initialise  ! mpi_routines.f90
   CALL after_control   ! setup.f90
   CALL open_files      ! setup.f90
+
+!zmeny
+  OPEN(unit=48, status = 'OLD', file=trim(data_dir) // '/' //list_of_particles)
+  OPEN(unit=49, status = 'OLD', file=trim(data_dir) // '/' //nop_file)
+  READ(49,*) nop
+  CLOSE(49)
+  ALLOCATE(my_ID(nop)) 
+  READ(48,*) my_ID 
+  CLOSE(48)
+  IF (rank .EQ. 0) THEN
+  WRITE(*,*) "Following particles will be tracked: ", my_ID
+  END IF
+
+  write (filename,"(A20,I5.5,A4)") "//tracked_particles-", rank, ".txt"
+  OPEN(unit=50, status='REPLACE', file=trim(data_dir) // trim(filename))
+!end_zmeny
 
   ! Re-scan the input deck for items which require allocated memory
   CALL read_deck(deck_file, .TRUE., c_ds_last)
@@ -191,7 +218,9 @@ PROGRAM pic
       CALL run_injectors
       ! .FALSE. this time to use load balancing threshold
       IF (use_balance) CALL balance_workload(.FALSE.)
-      CALL push_particles
+!! zmeny
+      CALL push_particles(my_ID, nop)
+!! end_zmeny
       IF (use_particle_lists) THEN
         ! After this line, the particles can be accessed on a cell by cell basis
         ! Using the particle_species%secondary_list property

@@ -27,8 +27,17 @@ MODULE particles
   IMPLICIT NONE
 
 CONTAINS
+!zmeny
+  SUBROUTINE push_particles(a, n)
+	INTEGER :: n,ii
+#if defined(PARTICLE_ID)
+	INTEGER(i8), DIMENSION(n) :: a
+#elif defined(PARTICLE_ID4)
+        INTEGER(i4), DIMENSION(n) :: a
+#endif
 
-  SUBROUTINE push_particles
+	
+!end_zmeny    
 
     ! 2nd order accurate particle pusher using parabolic weighting
     ! on and off the grid. The calculation of J looks rather odd
@@ -408,6 +417,30 @@ CONTAINS
         final_part_x = current%part_pos(1)
         final_part_y = current%part_pos(2)
 #endif
+
+
+!zmeny
+	DO ii=0, nproc-1 
+
+	  IF (rank == ii) THEN
+		IF (is_in_list(current%id, a, n)) THEN
+#if defined(PARTICLE_ID)
+	write(50,'(i19,6ES25.16E2)') current%id, time, current%part_pos(1), current%part_pos(2), &
+		  current%part_p(1), current%part_p(2), current%part_p(3)
+#elif defined(PARTICLE_ID4)
+        write(50,'(i10,6ES25.16E2)') current%id, time, current%part_pos(1), current%part_pos(2), &
+		  current%part_p(1), current%part_p(2), current%part_p(3)
+#endif	  
+		END IF 
+	 END IF
+  ! This call ensures that all processes wait for each other
+#ifdef MPI
+	CALL MPI_Barrier(MPI_COMM_WORLD, errcode)
+#endif
+	END DO	
+!end_zmeny
+
+
         ! Original code calculates densities of electrons, ions and neutrals
         ! here. This has been removed to reduce memory footprint
 
@@ -567,6 +600,29 @@ CONTAINS
 
   END SUBROUTINE push_particles
 
+!zmeny
+  FUNCTION is_in_list(j,a, nop) RESULT(res)
+    INTEGER ::  nop
+#if defined(PARTICLE_ID)
+    INTEGER(i8) ::  j                ! current Id
+    INTEGER(i8), DIMENSION(nop) :: a !a.. list of  particles
+#elif defined(PARTICLE_ID4)
+    INTEGER(i4) ::  j                ! current Id
+    INTEGER(i4), DIMENSION(nop) :: a !a.. list of  particles
+#endif	  	
+    LOGICAL :: res		     ! result -is in list?
+    INTEGER :: k
+
+    res = .FALSE.
+    DO k=1,nop
+      IF  (a(k) == j) THEN
+        res = .TRUE.
+        RETURN
+      END IF
+    END DO
+    RETURN
+  END FUNCTION is_in_list
+!end_zmeny
 
 
   ! Background distribution function used for delta-f calculations.
