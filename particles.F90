@@ -420,9 +420,6 @@ CONTAINS
 
 
 !zmeny
-	DO ii=0, nproc-1 
-
-	  IF (rank == ii) THEN
 		IF (is_in_list(current%id, a, n)) THEN
 #if defined(PARTICLE_ID)
 	write(50,'(i19,6ES25.16E2)') current%id, time, current%part_pos(1), current%part_pos(2), &
@@ -432,12 +429,6 @@ CONTAINS
 		  current%part_p(1), current%part_p(2), current%part_p(3)
 #endif	  
 		END IF 
-	 END IF
-  ! This call ensures that all processes wait for each other
-#ifdef MPI
-	CALL MPI_Barrier(MPI_COMM_WORLD, errcode)
-#endif
-	END DO	
 !end_zmeny
 
 
