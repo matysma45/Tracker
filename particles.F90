@@ -29,14 +29,17 @@ MODULE particles
 CONTAINS
 !zmeny
   SUBROUTINE push_particles(a, n)
-	INTEGER :: n,ii
+	INTEGER :: n,ii,jj
 #if defined(PARTICLE_ID)
 	INTEGER(i8), DIMENSION(n) :: a
 #elif defined(PARTICLE_ID4)
         INTEGER(i4), DIMENSION(n) :: a
 #endif
 
-	
+        REAL(num), DIMENSION(n,5) :: tracked_array
+        REAL(num), DIMENSION(n,5) :: tracked_sum   
+        INTEGER :: tracked_number    
+        
 !end_zmeny    
 
     ! 2nd order accurate particle pusher using parabolic weighting
@@ -151,7 +154,10 @@ CONTAINS
 #ifdef PREFETCH
     CALL prefetch_particle(species_list(1)%attached_list%head)
 #endif
-
+    !zmeny
+    tracked_array = 0.0_num
+    tracked_sum = 0.0_num
+    !end_zmeny
     jx = 0.0_num
     jy = 0.0_num
     jz = 0.0_num
@@ -418,17 +424,18 @@ CONTAINS
         final_part_y = current%part_pos(2)
 #endif
 
-
 !zmeny
-		IF (is_in_list(current%id, a, n)) THEN
-#if defined(PARTICLE_ID)
-	write(50,'(i19,6ES25.16E2)') current%id, time, current%part_pos(1), current%part_pos(2), &
-		  current%part_p(1), current%part_p(2), current%part_p(3)
-#elif defined(PARTICLE_ID4)
-        write(50,'(i10,6ES25.16E2)') current%id, time, current%part_pos(1), current%part_pos(2), &
-		  current%part_p(1), current%part_p(2), current%part_p(3)
-#endif	  
-		END IF 
+
+          tracked_number = is_in_list(current%id, a, n) 
+          IF (tracked_number /= 0) THEN          
+            tracked_array(tracked_number,1)= current%part_pos(1)
+            tracked_array(tracked_number,2)= current%part_pos(2)
+            tracked_array(tracked_number,3)= current%part_p(1)
+            tracked_array(tracked_number,4)= current%part_p(2)
+            tracked_array(tracked_number,5)= current%part_p(3)
+          !WRITE(*,*) time       !test if the data are correct 
+          !WRITE(*,'(I10,5ES25.16E2)') a(tracked_number), tracked_array(tracked_number,:)
+          END IF
 !end_zmeny
 
 
@@ -589,6 +596,24 @@ CONTAINS
       jz = jz - initial_jz
     END IF
 
+!zmeny
+  CALL MPI_REDUCE(tracked_array, tracked_sum , n*5, MPI_DOUBLE_PRECISION, &
+  MPI_SUM, 0, comm, errcode)
+  !barrier is not needed here
+  IF (rank == 0) THEN
+    WRITE(50,'(ES25.16E2)') time
+    
+    DO jj=1,n
+#if defined(PARTICLE_ID)
+      WRITE(50,'(I19,5ES25.16E2)') a(jj), tracked_sum(jj,:)
+#elif defined(PARTICLE_ID4)
+      WRITE(50,'(I10,5ES25.16E2)') a(jj), tracked_sum(jj,:)
+#endif
+    END DO
+ END IF
+
+!end zmeny
+
   END SUBROUTINE push_particles
 
 !zmeny
@@ -601,13 +626,13 @@ CONTAINS
     INTEGER(i4) ::  j                ! current Id
     INTEGER(i4), DIMENSION(nop) :: a !a.. list of  particles
 #endif	  	
-    LOGICAL :: res		     ! result -is in list?
+    INTEGER :: res		     ! result -is in list and where?
     INTEGER :: k
 
-    res = .FALSE.
+    res = 0
     DO k=1,nop
       IF  (a(k) == j) THEN
-        res = .TRUE.
+        res = k
         RETURN
       END IF
     END DO

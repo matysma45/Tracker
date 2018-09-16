@@ -131,9 +131,12 @@ PROGRAM pic
   WRITE(*,*) "Following particles will be tracked: ", my_ID
   END IF
 
-  write (filename,"(A20,I5.5,A4)") "//tracked_particles-", rank, ".txt"
-  OPEN(unit=50, status='REPLACE', file=trim(data_dir) // trim(filename))
-!end_zmeny
+   IF (rank == 0) THEN
+     write (filename,"(A19,A4)") "//tracked_particles", ".txt"
+     OPEN(unit=50, status='REPLACE', file=trim(data_dir) // trim(filename))
+  END IF
+
+  !end_zmeny
 
   ! Re-scan the input deck for items which require allocated memory
   CALL read_deck(deck_file, .TRUE., c_ds_last)
@@ -219,6 +222,7 @@ PROGRAM pic
       ! .FALSE. this time to use load balancing threshold
       IF (use_balance) CALL balance_workload(.FALSE.)
 !! zmeny
+      
       CALL push_particles(my_ID, nop)
 !! end_zmeny
       IF (use_particle_lists) THEN
