@@ -74,6 +74,7 @@ PROGRAM pic
 	CHARACTER(LEN=64) :: nop_file = 'nop.list', line 
 	LOGICAL :: res
 	CHARACTER(LEN=64) :: filename
+        REAL(num) :: dump_time, dump_time_orig
 !end_zmeny 
   step = 0
   time = 0.0_num
@@ -123,12 +124,15 @@ PROGRAM pic
   OPEN(unit=48, status = 'OLD', file=trim(data_dir) // '/' //list_of_particles)
   OPEN(unit=49, status = 'OLD', file=trim(data_dir) // '/' //nop_file)
   READ(49,*) nop
+  READ(49,*) dump_time_orig
+  dump_time = dump_time_orig
   CLOSE(49)
   ALLOCATE(my_ID(nop)) 
   READ(48,*) my_ID 
   CLOSE(48)
   IF (rank .EQ. 0) THEN
   WRITE(*,*) "Following particles will be tracked: ", my_ID
+  WRITE(*,*) "At time: ", dump_time_orig
   END IF
 
    IF (rank == 0) THEN
@@ -223,7 +227,10 @@ PROGRAM pic
       IF (use_balance) CALL balance_workload(.FALSE.)
 !! zmeny
       
-      CALL push_particles(my_ID, nop)
+      CALL push_particles(my_ID, nop,dump_time)
+      IF (time >= dump_time) THEN
+      dump_time=dump_time+dump_time_orig
+      END IF 
 !! end_zmeny
       IF (use_particle_lists) THEN
         ! After this line, the particles can be accessed on a cell by cell basis

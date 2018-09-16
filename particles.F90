@@ -28,7 +28,7 @@ MODULE particles
 
 CONTAINS
 !zmeny
-  SUBROUTINE push_particles(a, n)
+  SUBROUTINE push_particles(a, n, dump_time)
 	INTEGER :: n,ii,jj
 #if defined(PARTICLE_ID)
 	INTEGER(i8), DIMENSION(n) :: a
@@ -38,7 +38,8 @@ CONTAINS
 
         REAL(num), DIMENSION(n,5) :: tracked_array
         REAL(num), DIMENSION(n,5) :: tracked_sum   
-        INTEGER :: tracked_number    
+        INTEGER :: tracked_number 
+        REAL(num) :: dump_time   
         
 !end_zmeny    
 
@@ -425,7 +426,7 @@ CONTAINS
 #endif
 
 !zmeny
-
+        IF (time >= dump_time) THEN
           tracked_number = is_in_list(current%id, a, n) 
           IF (tracked_number /= 0) THEN          
             tracked_array(tracked_number,1)= current%part_pos(1)
@@ -436,6 +437,7 @@ CONTAINS
           !WRITE(*,*) time       !test if the data are correct 
           !WRITE(*,'(I10,5ES25.16E2)') a(tracked_number), tracked_array(tracked_number,:)
           END IF
+        END IF 
 !end_zmeny
 
 
@@ -597,6 +599,7 @@ CONTAINS
     END IF
 
 !zmeny
+IF (time >= dump_time) THEN
   CALL MPI_REDUCE(tracked_array, tracked_sum , n*5, MPI_DOUBLE_PRECISION, &
   MPI_SUM, 0, comm, errcode)
   !barrier is not needed here
@@ -611,7 +614,7 @@ CONTAINS
 #endif
     END DO
  END IF
-
+END IF
 !end zmeny
 
   END SUBROUTINE push_particles
