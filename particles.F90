@@ -29,7 +29,7 @@ MODULE particles
 CONTAINS
 !zmeny
   SUBROUTINE push_particles(a, n, dump_time)
-	INTEGER :: n,ii,jj
+	INTEGER :: n,ii,jj, kk
 #if defined(PARTICLE_ID)
 	INTEGER(i8), DIMENSION(n) :: a
 #elif defined(PARTICLE_ID4)
@@ -38,7 +38,9 @@ CONTAINS
 
         REAL(num), DIMENSION(n,5) :: tracked_array
         REAL(num), DIMENSION(n,5) :: tracked_sum   
-        INTEGER :: tracked_number 
+        INTEGER, DIMENSION(n) :: tracked_id
+        INTEGER :: tracked_id_master
+        INTEGER :: tracked_number, locally_tracked, master_tracked 
         REAL(num) :: dump_time   
         
 !end_zmeny    
@@ -158,6 +160,7 @@ CONTAINS
     !zmeny
     tracked_array = 0.0_num
     tracked_sum = 0.0_num
+    locally_tracked = 0
     !end_zmeny
     jx = 0.0_num
     jy = 0.0_num
@@ -428,12 +431,14 @@ CONTAINS
 !zmeny
         IF (time >= dump_time) THEN
           tracked_number = is_in_list(current%id, a, n) 
-          IF (tracked_number /= 0) THEN          
-            tracked_array(tracked_number,1)= current%part_pos(1)
-            tracked_array(tracked_number,2)= current%part_pos(2)
-            tracked_array(tracked_number,3)= current%part_p(1)
-            tracked_array(tracked_number,4)= current%part_p(2)
-            tracked_array(tracked_number,5)= current%part_p(3)
+          IF (tracked_number /= 0) THEN  
+            locally_tracked = locally_tracked +1        
+            tracked_array(locally_tracked,1)= current%part_pos(1)
+            tracked_array(locally_tracked,2)= current%part_pos(2)
+            tracked_array(locally_tracked,3)= current%part_p(1)
+            tracked_array(locally_tracked,4)= current%part_p(2)
+            tracked_array(locally_tracked,5)= current%part_p(3)
+            tracked_id(locally_tracked) = tracked_number;
           !WRITE(*,*) time       !test if the data are correct 
           !WRITE(*,'(I10,5ES25.16E2)') a(tracked_number), tracked_array(tracked_number,:)
           END IF
@@ -600,10 +605,31 @@ CONTAINS
 
 !zmeny
 IF (time >= dump_time) THEN
-  CALL MPI_REDUCE(tracked_array, tracked_sum , n*5, MPI_DOUBLE_PRECISION, &
-  MPI_SUM, 0, comm, errcode)
-  !barrier is not needed here
-  IF (rank == 0) THEN
+  IF (rank == 0 ) THEN
+    tracked_sum = tracked_array
+  ENDIF
+  CALL MPI_Barrier(MPI_COMM_WORLD, errcode)
+  DO ii=0, nproc-1 
+      IF (rank == ii) THEN
+          CALL MPI_SEND(locally_tracked, 1, MPI_INTEGER, 0, ii, comm, errcode)
+          DO kk =1,locally_tracked
+            CALL MPI_SEND(tracked_id(kk), 1, MPI_INTEGER, 0, ii, comm, errcode)
+            CALL MPI_SEND(tracked_array(kk,:), 5, MPI_DOUBLE_PRECISION, 0,&
+            tag, comm, errcode)
+          END DO     
+      ELSE 
+        IF (rank == 0 ) THEN
+         CALL MPI_RECV(master_tracked, 1, MPI_INTEGER, ii, ii, comm, status, errcode)
+         DO kk =1,master_tracked
+           CALL MPI_RECV(tracked_id_master, 1, MPI_INTEGER, ii, ii, comm, status, errcode)
+           CALL MPI_RECV(tracked_sum(tracked_id_master,:), 5, MPI_DOUBLE_PRECISION, ii,&
+           tag, comm, status, errcode)
+         END DO
+        END IF
+      END IF
+      CALL MPI_Barrier(MPI_COMM_WORLD, errcode)
+  END DO 
+ IF (rank == 0) THEN
     WRITE(50,'(ES25.16E2)') time
     
     DO jj=1,n
